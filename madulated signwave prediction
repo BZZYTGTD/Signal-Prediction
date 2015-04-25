@@ -1,0 +1,77 @@
+clear all;
+load modulatedSignals.mat
+percentage2Train=0.40;
+TraingData=[];
+for i = 1:size(modSig,2)
+    segmentLength = 100;
+    TrainingFunc = modSig(:,i);
+    [TrainingR, TrainingC] = size(TrainingFunc);
+    numSegment = floor(TrainingR*percentage2Train/segmentLength);
+    %data used to train the dictionary
+    data_temp = TrainingFunc(1:segmentLength*numSegment);
+    TraingData = [TraingData,reshape(data_temp,segmentLength,numSegment)];
+end
+%set parameters for KSVD dictionary 
+numAtoms=10;
+param.InitializationMethod =  'DataElements'; % Train KSVD using data
+param.errorFlag = 0;
+param.preserveDCAtom = 0;
+param.numIteration = 25; % number of iteration to execute the K-SVD algorithm.
+param.K = numAtoms;
+param.L = numAtoms;
+param.displayProgress = 1;
+[D , output] = KSVD(TraingData,param);
+%output consists of output.CoefMatrix and output.totalerr
+TrainingCoef = output.CoefMatrix;
+%==========================================================================
+%prediction 
+%--------------------------------------------------------------------------
+fsType = 1;
+testFunc = modSig(:,fsType);
+data = TraingData;
+lengthSignal=100;
+%segment the coefficient matrix into chunks so we can search
+testStart = 1;
+samplesUsed4Pred=20;
+testEnd = samplesUsed4Pred*lengthSignal;
+testData = testFunc(testStart:testEnd,1);
+OrigSignal=testData;
+testData = reshape(testData,lengthSignal,samplesUsed4Pred);
+testCoef = OMP(D,testData,numAtoms);
+reconData =D*testCoef ;
+%--------------------------------------------------------------------------
+%matching testCoef and output.CoefMatrix
+%--------------------------------------------------------------------------
+distTemp = 1e10;
+for i = 1:size(TrainingCoef,2)-size(testCoef,2) %this use to be nine
+a = i;
+b = size(testCoef,2)+i-1;
+distTest = TrainingCoef(:,a:b);
+A2 = abs(reshape(distTest',numel(distTest),1)); % makes column vectors
+B2 = abs(reshape(testCoef',numel(testCoef),1));
+dist = sqrt(dot(A2-B2,A2-B2));
+if dist<distTemp
+ind = i;
+distTemp = dist;
+end        
+end
+%==========================================================================
+ %distance
+%--------------------------------------------------------------------------
+c=ind;
+%c = ind+size(testCoef,2);
+% d = c + (10 - size(testCoef,2)) -1;
+prediction = testFunc(c*lengthSignal: c*lengthSignal+lengthSignal,1);
+%--------------------------------------------------------------------------
+predictedSignal = [OrigSignal; prediction];
+Expected = testFunc(testStart:size(predictedSignal,1),1);
+Obtained = predictedSignal;
+figure(1)
+subplot(2,1,1)
+plot(Expected);
+title('Expected Signal')
+axis auto
+subplot(2,1,2)
+plot(Obtained);
+error = sum((Expected - Obtained).^2)/(numel(Obtained));
+title(strcat('Reconstructed signal: Error = ',num2str(error)));
