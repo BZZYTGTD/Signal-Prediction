@@ -1,0 +1,22 @@
+close all;clear all; clc;
+
+t=1:16000;
+sig=sin(2*pi*(1/20).*t);
+fc = 1/10;
+fs = [32;64;128;256;512;1024;2048];
+method = 'am';
+
+for i = 1:size(fs,1)
+    modSig(:,i) = modulate(sig,fc,fs(i),method);
+end
+
+
+% Plotting
+for i = 1:size(fs,1)
+    figure()
+    plot(t,modSig(:,i));
+    title(strcat('Sampling Frequency:',{' '},num2str(fs(i))));
+end
+
+% Saving
+save('modulatedSignals.mat','modSig','fs');
